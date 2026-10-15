@@ -21,9 +21,9 @@ class NudgeBox:
         self.home = np.array([-0.35 * length, 0.25 * length])
         self.reset()
 
-    def reset(self):
-        """Park clear of the pendulum and the on-screen measurement label."""
-        self.center = self.home.copy()
+    def reset(self, cart_position=0.0):
+        """Park beside the current cart, clearing any previous drag velocity."""
+        self.center = self.home + np.array([cart_position, 0.0])
         self.velocity = np.zeros(2)
         self._previous_center = self.center.copy()
 

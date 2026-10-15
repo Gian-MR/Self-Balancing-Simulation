@@ -53,7 +53,7 @@ The main scene now uses physical dimensions with equal horizontal/vertical
 scaling: a 1 m rod and a 67 mm tennis ball. The ball's contact radius matches
 its drawing. A magnified tip inset makes it easier to inspect without enlarging
 the ball in the main scene. The 100 mm scale bar provides a size reference.
-The camera follows the cart at a fixed scale during live runs.
+The camera smoothly follows the cart at a fixed scale during live runs.
 
 Edit `geometry` in `config/parameters.yaml` for dimensions. Rod diameter (6 mm)
 and cart size (100 × 45 mm) are assumptions until measured; mass alone cannot
@@ -70,7 +70,10 @@ Matplotlib's pan/zoom toolbar modes before dragging.
 The box is a mouse-controlled obstacle with a soft spring/damper contact model,
 capped at 3 N. It applies physical forces to both cart motion and stick rotation;
 it never directly sets the stick angle or cart position. It stays where you put
-it after release, so move it clear if you want the push to end. Small nudges may
+it after release, so move it clear if you want the push to end. **Reset box**
+brings it back beside the cart's current position, even after the cart has moved
+far away. Resetting clears the box's velocity to avoid an artificial kick.
+Small nudges may
 be corrected; larger ones can knock the stick over. Swing-up tries to recover.
 
 The scene displays contact force as **Box push**. The last 30 simulated seconds

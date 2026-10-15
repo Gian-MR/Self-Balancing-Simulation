@@ -11,8 +11,8 @@ from matplotlib.path import Path
 from matplotlib.transforms import Affine2D
 from matplotlib.widgets import Button
 
-from .interaction import NudgeBox
 from .geometry import dimensions
+from .interaction import NudgeBox
 from .simulation import samples_to_result, simulation_steps
 
 
@@ -84,7 +84,7 @@ def create_figure(result, config, fig=None, show_controls=False):
                    facecolor="#d2a758", edgecolor="none", zorder=8)
     scene.add_patch(pivot)
     label = scene.text(0.03, 0.97, "", transform=scene.transAxes, va="top", fontsize=8,
-                      bbox=dict(facecolor="white", edgecolor="none", alpha=0.85))
+                      bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85})
     scene.set_title(f"To scale: rod {length:g} m | ball Ø {sizes['top_diameter'] * 1000:g} mm",
                     fontsize=10)
 
@@ -96,7 +96,7 @@ def create_figure(result, config, fig=None, show_controls=False):
 
     # The ball is genuinely small in the main view. Magnify it separately;
     # never enlarge its collision boundary just to make it easier to see.
-    detail = scene.inset_axes([0.68, 0.05, 0.29, 0.23])
+    detail = scene.inset_axes((0.68, 0.05, 0.29, 0.23))
     extent = max(2 * sizes["top_diameter"], 2 * sizes["rod_diameter"])
     detail.set_xlim(-extent, extent)
     detail.set_ylim(-extent, extent)
@@ -132,7 +132,10 @@ def create_figure(result, config, fig=None, show_controls=False):
         axes[-1].legend(loc="best")
     axes[-1].set_xlabel("Simulation time (s)")
 
+    last_camera_time = float(time[0])
+
     def draw(index) -> list[Artist]:
+        nonlocal last_camera_time
         # Live mode replaces these arrays as new physical samples arrive.
         time, state = result["time"], result["state"]
         angle_errors = (state[:, 2] + np.pi) % (2 * np.pi) - np.pi
@@ -187,10 +190,16 @@ def create_figure(result, config, fig=None, show_controls=False):
                 if high - low < 2:
                     middle = (low + high) / 2
                     axes[-1].set_ylim(middle - 1, middle + 1, auto=True)
-            # Follow the cart without continually zooming out and shrinking parts.
+            # Ease toward the cart rather than jumping when it crosses a boundary.
+            # Simulation time makes smoothing independent of rendering frame rate.
             left, right = scene.get_xlim()
-            if position < left + 0.4 * (right - left) or position > right - 0.4 * (right - left):
-                scene.set_xlim(position - half_width, position + half_width)
+            elapsed = max(0.0, float(time[index]) - last_camera_time)
+            follow_fraction = -np.expm1(-elapsed / 0.25)
+            camera_center = (left + right) / 2
+            camera_center += follow_fraction * (position - camera_center)
+            view_half_width = (right - left) / 2
+            scene.set_xlim(camera_center - view_half_width, camera_center + view_half_width)
+            last_camera_time = float(time[index])
         left, right = scene.get_xlim()
         scale_bar.set_xdata([0.04, 0.04 + 0.1 / (right - left)])
         for cursor in cursors:
@@ -260,7 +269,7 @@ def show_animation(result, config):
         reset = Button(fig.add_subplot(button_grid[0, 3]), "Reset box")
 
         def reset_box(event):
-            box.reset()
+            box.reset(cart_position=float(history[-1]["state"][0]))
             active["drag_offset"] = None
             patch.set_xy(box.lower_left)
             patch.set_facecolor("mediumpurple")

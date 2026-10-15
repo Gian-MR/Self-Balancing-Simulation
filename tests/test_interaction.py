@@ -114,8 +114,11 @@ class InteractionTests(unittest.TestCase):
             self.assertGreater(abs(ball.center[0]), .001)
             text = scene.texts[0].get_text()
             self.assertIn("t = 0.17", text)  # Continues beyond configured 0.05 s.
+            cart = next(p for p in scene.patches if isinstance(p, Rectangle)
+                        and p is not box)
+            cart_position = cart.get_x() + cart.get_width() / 2
             click_button(fig, "Reset box")
-            np.testing.assert_allclose(box.get_xy(), before)
+            np.testing.assert_allclose(box.get_xy(), before + [cart_position, 0])
             for mode, label in [("swing-up", "Restart: Swing up"),
                                 ("fall", "Restart: Fall (motor off)"),
                                 ("balance", "Restart: Balance")]:
