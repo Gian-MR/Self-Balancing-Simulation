@@ -1,12 +1,12 @@
 # Use meters, kilograms, seconds, and newtons throughout the model.
 physics:
-  cart_mass: 5.0
-  stick_mass: 0.1
-  top_mass: 0.1
+  cart_mass: 0.19        #mass of motor
+  stick_mass: 0.034      #mass of 1 meter carbon fiber rod
+  top_mass: 0.00837      #mass of 1/2 inch steel ball bearing
   stick_length: 1.0
   gravity: 9.81
-  cart_friction: 0.05       # Force opposing cart velocity (N per m/s).
-  pivot_friction: 0.01     # Torque opposing rotation (N m per rad/s).
+  cart_friction: 0.0    # Force opposing cart velocity (N per m/s).
+  pivot_friction: 0.0    # Torque opposing rotation (N m per rad/s).
 
 simulation:
   duration: 10.0
@@ -15,7 +15,7 @@ simulation:
   fall_angle_degrees: 80.0 # End before the rod reaches horizontal.
 
 controller: #LQR means Linear Quadratic Regulator
-  max_force: 15.0
+  max_force: 13.0 
   # LQR penalties: [cart position, cart speed, stick angle, angular speed].
   # Larger penalties encourage smaller errors in the corresponding quantity.
   state_weights: [10.0, 1.0, 100.0, 5.0]
@@ -43,10 +43,10 @@ motor:
 
 swing_up:
   duration: 30.0          # Swing-up needs longer than a near-upright balance run.
-  energy_gain: 20.0
+  energy_gain: 40.0
   position_gain: 0.03
   speed_gain: 0.1
-  max_acceleration: 2.0   # m/s² requested; motor limits still apply.
+  max_acceleration: 20.0   # m/s² requested; motor limits still apply.
   kick_duration: 0.2      # s; initial nudge from the exact downward position.
   kick_acceleration: 1.0  # m/s²
   capture_angle_degrees: 6.0

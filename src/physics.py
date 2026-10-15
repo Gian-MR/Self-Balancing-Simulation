@@ -3,7 +3,7 @@
 import numpy as np
 
 
-def derivatives(time, state, force, physics):
+def derivatives(time, state, force, physics, tip_force=None):
     """Return rates of change for [position, speed, angle, angular speed].
 
     Angle is in radians: zero is upright; positive leans to the right.
@@ -35,5 +35,12 @@ def derivatives(time, state, force, physics):
         mass_distance * p["gravity"] * np.sin(angle)
         - p["pivot_friction"] * angular_speed,
     ])
+    if tip_force is not None:
+        horizontal, vertical = tip_force
+        # An external push on the tip affects BOTH cart motion and rotation.
+        # The tip moves by [L*cos(angle), -L*sin(angle)] per radian, so its
+        # force contributes this generalized torque about the moving pivot.
+        forces[0] += horizontal
+        forces[1] += length * (np.cos(angle) * horizontal - np.sin(angle) * vertical)
     acceleration, angular_acceleration = np.linalg.solve(mass_matrix, forces)
     return np.array([speed, acceleration, angular_speed, angular_acceleration])

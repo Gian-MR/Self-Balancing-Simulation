@@ -2,6 +2,7 @@
 
 import numpy as np
 from scipy.integrate import solve_ivp
+from typing import Any
 
 from .controller import SwingUpController, calculate_force, design_controller
 from .motor import DCMotor
@@ -62,98 +63,111 @@ def validate_config(config, mode="balance"):
             raise ValueError("Swing-up angles must satisfy 0 < capture < release < 90")
 
 
-def run_simulation(config, mode="balance"):
-    """Return times, true states, applied forces, and the stopping reason."""
+def simulation_steps(config, mode="balance", contact=None, live=False):
+    """Yield physical samples one control interval at a time.
+
+    Batch runs and the interactive window use exactly the same physics. Live
+    swing-up/balance runs continue beyond the configured recording duration so
+    the user can keep nudging. Fall mode still stops at its fall-angle limit.
+    """
     validate_config(config, mode)
     if mode not in ("balance", "fall", "swing-up"):
         raise ValueError("mode must be 'balance', 'fall', or 'swing-up'")
-    
-    p = config["physics"]
-    s = config["simulation"]
-    c = config["controller"]
+    p, s, c = config["physics"], config["simulation"], config["controller"]
     sensor = config["sensors"]
     motor_settings = config.get("motor", {})
     motor = DCMotor(motor_settings) if motor_settings.get("enabled", False) else None
     swing = SwingUpController(p, c, config["swing_up"]) if mode == "swing-up" else None
     duration = config["swing_up"]["duration"] if swing is not None else s["duration"]
-    
     gains = design_controller(p, c) if mode == "balance" else None
     rng = np.random.default_rng(sensor["seed"])
     state = np.array([0.0, 0.0, np.deg2rad(s["initial_angle_degrees"]), 0.0])
     if swing is not None:
-        state[2] = np.pi  # 180 degrees: hanging straight below the pivot.
-    time = 0.0
-    times, states, forces = [time], [state.copy()], []
-    requested_forces, motor_readings = [], []
-    voltage = 0.0
-    phases = []
+        state[2] = np.pi
+    time, voltage, force = 0.0, 0.0, 0.0
+    phase = mode
     reason = "Completed requested duration"
 
-    # Stop near-upright experiments before horizontal. Swing-up intentionally
-    # passes through horizontal, so it does not use this stopping event.
-    def fallen(t, y):
-        return np.deg2rad(s["fall_angle_degrees"]) - abs(y[2])
+    class FallEvent:
+        # SciPy reads these attributes on its callable event object.
+        terminal = True
+        direction = -1
 
-    fallen.terminal = True
-    fallen.direction = -1
+        def __call__(self, t, y):
+            return np.deg2rad(s["fall_angle_degrees"]) - abs(y[2])
+
+    fallen = FallEvent()
 
     def applied_force(y):
         if motor is None:
             return force
         return motor.evaluate(voltage, y[1], coast=(mode == "fall"))["force"]
 
-    while time < duration:
+    def tip_force(y):
+        return contact.force_on_tip(y, p) if contact is not None else np.zeros(2)
+
+    def sample():
+        return {
+            "time": time, "state": state.copy(), "force": applied_force(state),
+            "requested_force": force, "phase": phase, "tip_force": tip_force(state),
+            "motor": motor.evaluate(voltage, state[1], coast=(mode == "fall"))
+                     if motor is not None else None,
+        }
+
+    while live or time < duration:
         measurement = read_sensors(state, sensor["noise_std"], rng)
         force = (calculate_force(measurement, gains, c["max_force"])
                  if mode == "balance" else 0.0)
         if swing is not None:
             force = swing.force(measurement, time)
-        phases.append(swing.phase if swing is not None else mode)
-        requested_forces.append(force)
+        phase = swing.phase if swing is not None else mode
         if motor is not None:
             voltage = motor.voltage_for_force(force, measurement[1]) if mode != "fall" else 0.0
-            motor_readings.append(motor.evaluate(voltage, state[1], coast=(mode == "fall")))
-        forces.append(applied_force(state))
-        next_time = min(time + s["control_interval"], duration)
-
-        # Hold commanded VOLTAGE constant between controller updates. Actual motor
-        # force changes with speed inside the solver because of back EMF.
-        # With the motor disabled in YAML, hold ideal force constant instead.
-        # SciPy takes smaller internal steps as needed for accurate physics.
+        # Yield before integration: the UI can move the obstacle between steps.
+        yield sample()
+        next_time = time + s["control_interval"]
+        if not live:
+            next_time = min(next_time, duration)
+        # Hold commanded voltage fixed while actual force changes with speed.
+        # Recompute contact inside the solver so it responds to tip movement.
         solution = solve_ivp(
-            lambda t, y: derivatives(t, y, applied_force(y), p),
+            lambda t, y: derivatives(t, y, applied_force(y), p, tip_force(y)),
             (time, next_time), state, events=fallen if swing is None else None,
-            rtol=1e-8, atol=1e-10,
-            max_step=s["control_interval"] / 2,
+            rtol=1e-8, atol=1e-10, max_step=s["control_interval"] / 2,
         )
-        
         if not solution.success:
             raise RuntimeError(solution.message)
         time = float(solution.t[-1])
         state = solution.y[:, -1].copy()
-        times.append(time)
-        states.append(state)
         if solution.status == 1:
             reason = "Stopped: stick reached the fall angle limit"
             break
 
-    # Record the final physical force using the last held voltage.
-    forces.append(applied_force(state))
-    requested_forces.append(requested_forces[-1])
-    if motor is not None:
-        motor_readings.append(motor.evaluate(voltage, state[1], coast=(mode == "fall")))
     if swing is not None:
         angle_error = (state[2] + np.pi) % (2 * np.pi) - np.pi
         settled = (swing.phase == "balance" and abs(angle_error) < np.deg2rad(2)
                    and abs(state[1]) < 0.1 and abs(state[3]) < 0.1)
         reason = ("Swing-up complete: balancing upright" if settled
                   else "Swing-up duration ended before settling upright")
-    result = {
-        "time": np.array(times), "state": np.array(states),
-        "force": np.array(forces), "reason": reason, "mode": mode,
-        "requested_force": np.array(requested_forces),
-        "phase": np.array(phases + [phases[-1]]),
+    final = sample()
+    final["reason"] = reason
+    yield final
+
+
+def samples_to_result(samples, mode):
+    """Convert recorded samples into arrays used by plots and CSV export."""
+    result: dict[str, Any] = {
+        key: np.array([sample[key] for sample in samples])
+        for key in ("time", "state", "force", "requested_force", "phase", "tip_force")
     }
-    result["motor"] = ({key: np.array([reading[key] for reading in motor_readings])
-                        for key in motor_readings[0]} if motor is not None else None)
+    result["reason"] = samples[-1].get("reason", "Live simulation")
+    result["mode"] = mode
+    result["motor"] = ({key: np.array([sample["motor"][key] for sample in samples])
+                        for key in samples[0]["motor"]}
+                       if samples[0]["motor"] is not None else None)
     return result
+
+
+def run_simulation(config, mode="balance"):
+    """Run a complete undisturbed experiment for saved results or tests."""
+    return samples_to_result(list(simulation_steps(config, mode)), mode)

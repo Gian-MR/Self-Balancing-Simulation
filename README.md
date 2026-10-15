@@ -34,16 +34,37 @@ python main.py --mode fall      # Turn off the motor and watch it fall.
 python main.py --no-gui         # Save results without an animation window.
 ```
 
-Each run saves a CSV and a PNG under `results/`, overwriting the previous files
-for that mode. Close the animation window to finish the interactive run. Physics
-is computed first; the animation then plays those recorded results. Playback
-speed may vary with your computer.
+Each run first saves an undisturbed reference experiment as CSV and PNG under
+`results/`, overwriting the previous files for that mode. The window then starts
+a fresh, live simulation that responds to mouse interaction. Close the window to
+finish. Slow rendering slows playback rather than increasing the physics steps.
+Mouse nudges are not included in the automatically saved reference CSV/PNG.
 
 The animation window has **Restart: Swing up**, **Restart: Balance**, and
 **Restart: Fall (motor off)** buttons. Swing-up starts exactly downward; balance
 and fall use the configured initial tilt. You can switch while playback is
-running or after it finishes.
-Button playback does not overwrite the CSV/PNG saved at program startup.
+running or after it finishes. Live swing-up and balance keep running beyond the
+configured reference duration so you can keep experimenting. Fall mode still
+stops at its fall limit. Restart buttons do not overwrite the saved reference.
+
+## Nudge the weight
+
+Click and hold the **purple box**, then drag it into the **orange tip weight**.
+It turns red while pushing. Move it away to release contact, or click **Reset
+box**. Dragging only affects the tip weight, not the rod or blue cart. Disable
+Matplotlib's pan/zoom toolbar modes before dragging.
+
+The box is a mouse-controlled obstacle with a soft spring/damper contact model,
+capped at 3 N. It applies physical forces to both cart motion and stick rotation;
+it never directly sets the stick angle or cart position. It stays where you put
+it after release, so move it clear if you want the push to end. Small nudges may
+be corrected; larger ones can knock the stick over. Swing-up tries to recover.
+
+The scene displays contact force as **Box push**. The last 30 simulated seconds
+are kept in the live plots. This is a simplified interaction model: the box is
+positioned by the mouse and has no simulated mass or recoil. Strong pushes can
+exceed the motor model's operating envelope; the window pauses with a message
+and the Restart buttons remain available.
 
 ## Learn one part at a time
 
@@ -52,8 +73,9 @@ Button playback does not overwrite the CSV/PNG saved at program startup.
 3. Open `physics.py`: it calculates the derivatives, not the animation.
 4. Open `simulation.py`: SciPy advances time between controller updates.
 5. Open `controller.py`: LQR calculates a corrective motor force.
-6. Open `visualization.py`: it draws the recorded states.
+6. Open `visualization.py`: it draws the states and handles mouse interaction.
 7. Try a small sensor noise value in the configuration after ideal balancing works.
+8. Open `interaction.py`: it computes the box's force on the tip weight.
 
 Examples: change top mass from 0.2 to 0.3 kg, compare a 4° and 8° starting tilt,
 or reduce the force limit. The LQR gains are recalculated when the model changes;
