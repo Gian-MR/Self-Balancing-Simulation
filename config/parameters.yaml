@@ -2,11 +2,19 @@
 physics:
   cart_mass: 0.19        #mass of motor
   stick_mass: 0.034      #mass of 1 meter carbon fiber rod
-  top_mass: 0.00837      #mass of 1/2 inch steel ball bearing
+  top_mass: 0.0560      #mass of tennis ball
   stick_length: 1.0
   gravity: 9.81
   cart_friction: 0.0    # Force opposing cart velocity (N per m/s).
   pivot_friction: 0.0    # Torque opposing rotation (N m per rad/s).
+
+geometry:
+  # All sizes are in meters. These do not change the rod/point-mass dynamics.
+  top_diameter: 0.067   # Representative 67 mm tennis ball; also used for contact.
+  rod_diameter: 0.006   # Assumed 6 mm; replace with your measured rod diameter.
+  cart_width: 0.10      # Assumed carriage envelope; not a motor specification.
+  cart_height: 0.045
+  box_size: 0.04       # Draggable obstacle is a 40 mm square.
 
 simulation:
   duration: 10.0

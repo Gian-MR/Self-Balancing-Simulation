@@ -2,23 +2,28 @@
 
 import numpy as np
 
+from .geometry import dimensions
+
 
 class NudgeBox:
     """A mouse-positioned spring/damper obstacle with a limited pushing force."""
 
-    width = 0.18
-    height = 0.18
-    tip_radius = 0.07  # Same visible radius as the orange weight.
     stiffness = 80.0  # N/m of overlap.
     damping = 1.5     # N per m/s of relative closing speed.
     max_force = 3.0   # N; dragging never directly changes the stick's state.
 
-    def __init__(self):
+    def __init__(self, config=None):
+        sizes = dimensions(config)
+        # The visible ball and its contact boundary use the SAME dimensions.
+        self.width = self.height = sizes["box_size"]
+        self.tip_radius = sizes["top_diameter"] / 2
+        length = config["physics"]["stick_length"] if config is not None else 1.0
+        self.home = np.array([-0.35 * length, 0.25 * length])
         self.reset()
 
     def reset(self):
         """Park clear of the pendulum and the on-screen measurement label."""
-        self.center = np.array([-1.5, -0.1])
+        self.center = self.home.copy()
         self.velocity = np.zeros(2)
         self._previous_center = self.center.copy()
 

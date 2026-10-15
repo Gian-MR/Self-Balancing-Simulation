@@ -49,7 +49,20 @@ stops at its fall limit. Restart buttons do not overwrite the saved reference.
 
 ## Nudge the weight
 
-Click and hold the **purple box**, then drag it into the **orange tip weight**.
+The main scene now uses physical dimensions with equal horizontal/vertical
+scaling: a 1 m rod and a 67 mm tennis ball. The ball's contact radius matches
+its drawing. A magnified tip inset makes it easier to inspect without enlarging
+the ball in the main scene. The 100 mm scale bar provides a size reference.
+The camera follows the cart at a fixed scale during live runs.
+
+Edit `geometry` in `config/parameters.yaml` for dimensions. Rod diameter (6 mm)
+and cart size (100 × 45 mm) are assumptions until measured; mass alone cannot
+determine them. The purple obstacle is a 40 mm square. Rod/cart dimensions are
+visual only; ball and obstacle sizes also determine contact. The dynamics still
+approximate the ball as a point mass at `stick_length` from the pivot; they do
+not include a finite sphere's rotational inertia or rod/cart collisions.
+
+Click and hold the **purple box**, then drag it into the **tennis ball**.
 It turns red while pushing. Move it away to release contact, or click **Reset
 box**. Dragging only affects the tip weight, not the rod or blue cart. Disable
 Matplotlib's pan/zoom toolbar modes before dragging.
@@ -86,7 +99,7 @@ The model has no floor collisions or rail ends. It stops at an 80° tilt by
 default in balance/fall modes. Swing-up allows full rotation and adds an energy
 controller that switches to LQR near upright. The rail is elevated with clearance
 for the rod below it; ground/rail collisions are not modeled.
-The orange circle is a visual marker for a point mass, not a modeled solid ball.
+The tennis ball is modeled dynamically as a point mass, without its own spin.
 
 ## How swing-up works
 
