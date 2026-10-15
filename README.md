@@ -3,6 +3,13 @@
 A beginner-friendly Python simulation of a cart balancing a stick with a weight
 fixed to its tip. Start with `main.py`, then follow the imports into `src/`.
 
+The actuator now models a Pololu #4698 DC gearmotor with voltage, current, back
+EMF, gearbox losses, and a pulley. See [the motor walkthrough](docs/motor.md).
+It is a first approximation fitted to published reference data, not a validated
+hardware replica. In near-upright balance mode, a 5 kg cart starting at 12 degrees
+exceeds the default motor capability and falls, while a 2 degree starting tilt
+recovers. Set `motor.enabled: false` for ideal force.
+
 ## Set up in VS Code
 
 Open this folder in VS Code. Install Microsoft's Python extension, then open a
@@ -21,7 +28,8 @@ dependency releases compatible with your Python version.
 ## Run
 
 ```sh
-python main.py                  # Balance from a small initial tilt.
+python main.py                  # Start hanging below, swing up, then balance.
+python main.py --mode balance   # Balance from a small initial tilt.
 python main.py --mode fall      # Turn off the motor and watch it fall.
 python main.py --no-gui         # Save results without an animation window.
 ```
@@ -31,9 +39,10 @@ for that mode. Close the animation window to finish the interactive run. Physics
 is computed first; the animation then plays those recorded results. Playback
 speed may vary with your computer.
 
-The animation window has **Restart: Balance** and **Restart: Fall (motor off)**
-buttons. Click either to replay that mode from the configured starting tilt in
-the same window. You can switch while playback is running or after it finishes.
+The animation window has **Restart: Swing up**, **Restart: Balance**, and
+**Restart: Fall (motor off)** buttons. Swing-up starts exactly downward; balance
+and fall use the configured initial tilt. You can switch while playback is
+running or after it finishes.
 Button playback does not overwrite the CSV/PNG saved at program startup.
 
 ## Learn one part at a time
@@ -52,8 +61,29 @@ changing mass therefore compares redesigned controllers, not a fixed controller'
 robustness to an unknown payload.
 
 The model has no floor collisions or rail ends. It stops at an 80° tilt by
-default. LQR balances near upright; it does not swing the stick up from below.
+default in balance/fall modes. Swing-up allows full rotation and adds an energy
+controller that switches to LQR near upright. The rail is elevated with clearance
+for the rod below it; ground/rail collisions are not modeled.
 The orange circle is a visual marker for a point mass, not a modeled solid ball.
+
+## How swing-up works
+
+The stick starts at 180 degrees (straight down) with zero speed. A brief cart
+nudge begins the swing. An energy-based controller then moves the cart to build
+the pendulum's energy. When the stick is within 6 degrees of upright and rotating
+slower than 1 rad/s, LQR takes over. If it leaves 20 degrees, swing-up resumes.
+Angles wrap around so a complete rotation is handled correctly.
+
+With the current 5 kg cart and motor limits, capture occurs at about 11.7 seconds
+in the 30-second swing-up run. Settings are under `swing_up` in YAML. Capture holds
+the cart near its position at handoff; it does not demand a return to the original
+center. The model still has no finite track, so this is not a guarantee that it
+would fit a real rail. Changing the plant or motor may require new tuning.
+
+The controller is in `controller.py` and its phase is displayed in the scene.
+CSV `balance_controller_active` is 1 when LQR is active, otherwise 0. The CSV angle
+remains unwrapped radians; displayed angles use the nearest upright position.
+The approach follows [MIT's energy-shaping and LQR swing-up discussion](https://underactuated.csail.mit.edu/acrobot.html).
 
 ## Check the model
 

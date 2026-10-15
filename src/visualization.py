@@ -29,10 +29,12 @@ def create_figure(result, config, fig=None, show_controls=False):
     # Include the entire recorded cart path in the viewport.
     scene.set_xlim(state[:, 0].min() - length - 0.4,
                    state[:, 0].max() + length + 0.4)
-    scene.set_ylim(-0.35, length + 0.35)
+    scene.set_ylim(-length - 0.35 if result["mode"] == "swing-up" else -0.35,
+                   length + 0.35)
     scene.set_aspect("equal")
     scene.set_xlabel("Horizontal position (m)")
     scene.set_ylabel("Height above pivot (m)")
+    # This line represents the elevated guide rail, not a collision floor.
     scene.axhline(-0.2, color="gray")
     cart = Rectangle((0, -0.2), 0.35, 0.2, color="steelblue")
     scene.add_patch(cart)
@@ -42,7 +44,12 @@ def create_figure(result, config, fig=None, show_controls=False):
     label = scene.text(0.03, 0.97, "", transform=scene.transAxes, va="top")
     scene.set_title("Blue: cart | Orange: top mass")
 
-    signals = [np.rad2deg(state[:, 2]), state[:, 0], result["force"]]
+    angle_errors = (state[:, 2] + np.pi) % (2 * np.pi) - np.pi
+    plotted_angles = np.rad2deg(angle_errors)
+    # Do not connect +180 to -180 with a misleading vertical line on the plot.
+    wrap_points = np.flatnonzero(abs(np.diff(angle_errors)) > np.pi) + 1
+    plotted_angles[wrap_points] = np.nan
+    signals = [plotted_angles, state[:, 0], result["force"]]
     titles = ["Stick angle (degrees)", "Cart position (m)", "Motor force (N)"]
     cursors = []
     for ax, signal, title in zip(axes, signals, titles):
@@ -51,6 +58,11 @@ def create_figure(result, config, fig=None, show_controls=False):
         ax.set_ylabel(title)
         ax.grid(alpha=0.25)
         cursors.append(ax.axvline(0, color="darkorange", linewidth=1))
+    if result.get("motor") is not None:
+        axes[-1].plot(time, result["requested_force"], linestyle="--", alpha=0.7,
+                      label="Requested")
+        axes[-1].lines[0].set_label("Actual")
+        axes[-1].legend(loc="best")
     axes[-1].set_xlabel("Simulation time (s)")
 
     def draw(index) -> list[Artist]:
@@ -62,7 +74,15 @@ def create_figure(result, config, fig=None, show_controls=False):
         rod.set_data([position, tip_x], [0, tip_y])
         weight.center = (tip_x, tip_y)
         label.set_text(f"t = {time[index]:.2f} s\n"
-                       f"angle = {np.rad2deg(angle):.2f}°")
+                       f"angle = {np.rad2deg(angle_errors[index]):.2f}°")
+        if result["mode"] == "swing-up":
+            label.set_text(label.get_text() + f"\nController: {result['phase'][index]}")
+        if result.get("motor") is not None:
+            motor = result["motor"]
+            label.set_text(label.get_text() +
+                           f"\nOutput shaft: {motor['output_rpm'][index]:.0f} RPM"
+                           f"\nCurrent: {motor['current'][index]:.2f} A"
+                           f"\nTerminal voltage: {motor['terminal_voltage'][index]:.1f} V")
         for cursor in cursors:
             cursor.set_xdata([time[index], time[index]])
 
@@ -82,7 +102,7 @@ def save_summary(result, config, path):
 
 
 def show_animation(result, config):
-    """Play a run, with buttons to restart in balance or fall mode."""
+    """Play a run, with buttons for swing-up, balance, and fall experiments."""
     fig = plt.figure(figsize=(11, 7), constrained_layout=True)
     # Keep animations and buttons alive while the window is open.
     active = {"animation": None, "buttons": []}
@@ -104,11 +124,18 @@ def show_animation(result, config):
         if subplot is None:
             raise RuntimeError("The simulation axes need a subplot layout.")
         grid = subplot.get_gridspec()
-        balance_button = Button(fig.add_subplot(grid[3, 0]), "Restart: Balance")
-        fall_button = Button(fig.add_subplot(grid[3, 1]), "Restart: Fall (motor off)")
-        balance_button.on_clicked(lambda event: start_mode("balance"))
-        fall_button.on_clicked(lambda event: start_mode("fall"))
-        active["buttons"] = [balance_button, fall_button]
+        button_grid = grid[3, :].subgridspec(1, 3)
+        buttons = []
+        for column, (button_mode, label) in enumerate([
+            ("swing-up", "Restart: Swing up"),
+            ("balance", "Restart: Balance"),
+            ("fall", "Restart: Fall (motor off)"),
+        ]):
+            button = Button(fig.add_subplot(button_grid[0, column]), label)
+            # Capture this iteration's mode so each button keeps its own action.
+            button.on_clicked(lambda event, selected_mode=button_mode: start_mode(selected_mode))
+            buttons.append(button)
+        active["buttons"] = buttons
 
         # Rendering at 30 fps is separate from the 100 Hz control updates.
         frame_times = np.arange(0, recording["time"][-1], 1 / 30)

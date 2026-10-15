@@ -13,8 +13,11 @@ State order throughout the code:
 | theta | Stick angle from upright; positive right | rad |
 | omega | Stick angular velocity | rad/s |
 
-The desired state is [0, 0, 0, 0]. The initial cart is stationary and centered,
-with an 8 degree stick tilt. Degrees in configuration are converted to radians.
+For near-upright balance mode, the desired state is [0, 0, 0, 0]. The initial cart
+is stationary and centered, with the configured stick tilt. Degrees in
+configuration are converted to radians. Swing-up mode instead starts exactly
+downward (180 degrees), pumps energy into the stick, and switches to LQR near
+upright. The cart target for capture is its position at the handoff.
 
 Let M be cart mass, m be stick mass, p be top mass, L be stick length, g be
 gravity, b be cart friction, c be pivot friction, and F be motor force. Define:
@@ -39,15 +42,20 @@ Upright has maximum potential energy, so a small uncontrolled tilt grows.
 `physics.py` solves the two equations for the accelerations using a 2×2 matrix.
 The state derivative is [v, x_ddot, omega, theta_ddot].
 
-SciPy integrates the nonlinear equations between 100 Hz control updates. The
-force is held constant within each interval. The LQR controller uses a linear
-approximation at upright, but the simulated physics remains nonlinear.
+SciPy integrates the nonlinear equations between 100 Hz control updates. With
+the DC motor enabled, commanded voltage is held within each interval and actual
+force changes with speed. With the ideal actuator, force is held constant.
+The LQR controller uses a linear approximation at upright, but the simulated
+physics remains nonlinear. See [the motor model](motor.md) for the actuator.
 
 Sensors initially report the exact four states. Optional Gaussian measurement
 noise is independent in each channel, with a fixed seed for repeatability.
 Velocity channels assume readings/estimates already exist; no estimator is
 implemented. Noise changes the controller input, never the true physical state.
 
-Simplifications: point top mass, rigid rod, ideal force actuator with saturation,
-viscous friction, no motor electrical dynamics, no delays, no ground contact,
-and no finite rail. The simulation ends at the configured fall angle.
+Simplifications: point top mass, rigid rod, viscous friction, no delays, no ground
+contact, and no finite rail. The DC motor uses a steady-current electrical model
+with voltage/current limits; its inductance and rotating inertia are omitted.
+Balance/fall modes end at the configured fall angle. Swing-up allows full
+rotation and runs for its separately configured duration; the rail is assumed
+elevated with clearance for the stick below it.

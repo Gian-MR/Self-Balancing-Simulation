@@ -11,7 +11,7 @@ physics:
 simulation:
   duration: 10.0
   control_interval: 0.01   # Read sensors and update force 100 times/second.
-  initial_angle_degrees: 12.0
+  initial_angle_degrees: 2.0
   fall_angle_degrees: 80.0 # End before the rod reaches horizontal.
 
 controller: #LQR means Linear Quadratic Regulator
@@ -25,3 +25,30 @@ sensors:
   # Standard deviations in [m, m/s, rad, rad/s]. Zero means ideal readings.
   noise_std: [0.0, 0.0, 0.0, 0.0]
   seed: 7
+
+motor:
+  enabled: true           # false restores the original ideal-force actuator.
+  # Published Pololu #4698 reference data at 24 V:
+  # https://www.pololu.com/product/4698
+  nominal_voltage: 24.0
+  gear_ratio: 6.25        # Exact ratio; product name rounds it to 6.3:1.
+  no_load_output_rpm: 1600.0
+  no_load_current: 0.1    # A
+  stall_current: 3.0      # A; reference for fitting, not a continuous rating.
+  stall_output_torque: 0.34323275 # N m; converted from 3.5 kgf cm.
+  # Our assumed mechanism and driver, not specifications of the motor:
+  supply_voltage: 24.0
+  pulley_radius: 0.0063661977 # m; 20 teeth * 2 mm pitch / (2*pi).
+  current_limit: 0.75     # A; conservative ideal driver limit (25% of stall).
+
+swing_up:
+  duration: 30.0          # Swing-up needs longer than a near-upright balance run.
+  energy_gain: 20.0
+  position_gain: 0.03
+  speed_gain: 0.1
+  max_acceleration: 2.0   # m/s² requested; motor limits still apply.
+  kick_duration: 0.2      # s; initial nudge from the exact downward position.
+  kick_acceleration: 1.0  # m/s²
+  capture_angle_degrees: 6.0
+  capture_angular_speed: 1.0 # rad/s
+  release_angle_degrees: 20.0

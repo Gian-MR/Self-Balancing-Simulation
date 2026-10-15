@@ -8,14 +8,17 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import yaml
 
-from src.balancing_stick.physics import derivatives
-from src.balancing_stick.simulation import run_simulation
+from src.physics import derivatives
+from src.simulation import run_simulation
 
 
 class SimulationTests(unittest.TestCase):
     def setUp(self):
         path = Path(__file__).resolve().parents[1] / "config/parameters.yaml"
         self.config = yaml.safe_load(path.read_text())
+        # These original tests isolate cart/stick physics with an ideal actuator.
+        # Motor behavior is tested separately in test_motor.py.
+        self.config["motor"]["enabled"] = False
 
     def test_uncontrolled_stick_falls(self):
         result = run_simulation(self.config, "fall")
@@ -25,7 +28,7 @@ class SimulationTests(unittest.TestCase):
 
     def test_controller_recovers_and_respects_force_limit(self):
         result = run_simulation(self.config)
-        self.assertAlmostEqual(result["time"][-1], 8)
+        self.assertAlmostEqual(result["time"][-1], self.config["simulation"]["duration"])
         self.assertLess(abs(result["state"][-1, 2]), np.deg2rad(0.1))
         self.assertLess(abs(result["state"][-1, 0]), 0.02)
         self.assertLessEqual(abs(result["force"]).max(), 15)
