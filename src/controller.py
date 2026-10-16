@@ -13,12 +13,13 @@ def design_controller(physics, controller_settings):
     LQR balances two goals: keeping the state near zero and using less force.
     It is intended for small tilts near upright, not swinging up from below.
     """
+    
     upright_state = np.zeros(4)
     derivative_step = 1e-6
     system_state_matrix = np.zeros((4, 4))
 
-    # Perturb one state at a time to measure how its derivatives change.
-    # These numerical slopes form the linear model: state_dot = A state + B F.
+    #* Perturb one state at a time to measure how its derivatives change.
+    #* These numerical slopes form the linear model: state_dot = A state + B F.
     for state_index in range(4):
         state_perturbation = np.zeros(4)
         state_perturbation[state_index] = derivative_step
@@ -47,19 +48,15 @@ def design_controller(physics, controller_settings):
 
 
 def calculate_force(measured_state, controller_gains, motor_force_limit):
-    """
-    Request cart force based on errors, capped by the controller setting.
+    """Return the requested force from the LQR controller, clipped to the motor's limits."""
 
-    With the DC motor enabled, its voltage/current limits further affect the
-    force actually delivered; this function only produces the request.
-    """
-    # The target state is all zeros, so measurement is also the state error.
     requested_motor_force = -np.dot(controller_gains, measured_state)
     return float(np.clip(requested_motor_force, -motor_force_limit, motor_force_limit))
 
 
 def upright_angle(stick_angle):
     """Angle error to the nearest upright position, always in [-pi, pi)."""
+
     return (stick_angle + np.pi) % (2 * np.pi) - np.pi
 
 
@@ -78,7 +75,7 @@ class SwingUpController:
         cart_position, cart_velocity, stick_angle, stick_angular_velocity = measured_state
         stick_angle = upright_angle(stick_angle)
         swing_up_settings = self.swing_up_settings
-        # Hysteresis prevents rapid switching at the capture boundary.
+
         if self.phase == "balance":
             if abs(stick_angle) > np.deg2rad(swing_up_settings["release_angle_degrees"]):
                 self.phase = "swing-up"
@@ -87,9 +84,8 @@ class SwingUpController:
             and abs(stick_angular_velocity) < swing_up_settings["capture_angular_speed"]
         ):
             self.phase = "balance"
-            # Catch where the cart is now instead of demanding an instant return
-            # to the original center, which could knock the pendulum over.
             self.cart_target_position = cart_position
+
         if self.phase == "balance":
             state_error = np.array(
                 [
@@ -112,8 +108,7 @@ class SwingUpController:
             + pendulum_mass_moment * physics["gravity"] * np.cos(stick_angle)
         )
         pendulum_upright_energy = pendulum_mass_moment * physics["gravity"]
-        # The moving pivot changes pendulum energy according to
-        # E_dot = -h*cos(angle)*angular_speed*cart_acceleration - friction losses.
+
         cart_acceleration = (
             swing_up_settings["energy_gain"]
             * (pendulum_energy - pendulum_upright_energy)
@@ -122,8 +117,7 @@ class SwingUpController:
             - swing_up_settings["position_gain"] * cart_position
             - swing_up_settings["speed_gain"] * cart_velocity
         )
-        # Exactly hanging and stationary has no preferred swing direction.
-        # A brief initial cart acceleration breaks that symmetry.
+        #* Apply a brief kick to the cart if it's still within the kick duration.
         if simulation_time < swing_up_settings["kick_duration"]:
             cart_acceleration = swing_up_settings["kick_acceleration"]
         cart_acceleration = np.clip(
@@ -131,7 +125,7 @@ class SwingUpController:
             -swing_up_settings["max_acceleration"],
             swing_up_settings["max_acceleration"],
         )
-        # Convert desired cart acceleration to force using the coupled physics.
+        #* Convert desired cart acceleration to force using the coupled physics.
         stick_angular_acceleration = (
             pendulum_mass_moment * physics["gravity"] * np.sin(stick_angle)
             - physics["pivot_friction"] * stick_angular_velocity

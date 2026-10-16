@@ -31,7 +31,7 @@ controller: #LQR means Linear Quadratic Regulator
 
 sensors:
   # Standard deviations in [m, m/s, rad, rad/s]. Zero means ideal readings.
-  noise_std: [0.02, 0.1, 0.02, 0.1]
+  noise_std: [0.0, 0.0, 0.0, 0.0]
   seed: 7
 
 motor:

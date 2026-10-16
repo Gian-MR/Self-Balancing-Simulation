@@ -16,14 +16,16 @@ def derivatives(simulation_time, system_state, cart_force, physics, tip_contact_
     top_weight_mass = physics["top_mass"]
 
     system_total_mass = physics["cart_mass"] + stick_mass + top_weight_mass
-    # Mass times distance from pivot, summed over the stick and top weight.
+
+    #* Mass times distance from pivot, summed over the stick and top weight.
     pendulum_mass_moment = stick_mass * stick_length / 2 + top_weight_mass * stick_length
-    # A uniform rod contributes m L² / 3; a point mass contributes m L².
+    
+    #* A uniform rod contributes m L² / 3; a point mass contributes m L².
     pendulum_pivot_inertia = stick_mass * stick_length**2 / 3 + top_weight_mass * stick_length**2
 
-    # Cart and stick accelerations are coupled: moving one affects the other.
-    # Solve the two Newton/Lagrange equations together rather than guessing
-    # the angular acceleration independently of the cart acceleration.
+    #* Cart and stick accelerations are coupled: moving one affects the other.
+    #* Solve the two Newton/Lagrange equations together rather than guessing
+    #* the angular acceleration independently of the cart acceleration.
     cart_stick_coupling = pendulum_mass_moment * np.cos(stick_angle)
     system_mass_matrix = np.array(
         [
@@ -42,9 +44,9 @@ def derivatives(simulation_time, system_state, cart_force, physics, tip_contact_
     )
     if tip_contact_force is not None:
         tip_horizontal_force, tip_vertical_force = tip_contact_force
-        # An external push on the tip affects BOTH cart motion and rotation.
-        # The tip moves by [L*cos(angle), -L*sin(angle)] per radian, so its
-        # force contributes this generalized torque about the moving pivot.
+        #* An external push on the tip affects BOTH cart motion and rotation.
+        #* The tip moves by [L*cos(angle), -L*sin(angle)] per radian, so its
+        #* force contributes this generalized torque about the moving pivot.
         generalized_forces[0] += tip_horizontal_force
         generalized_forces[1] += stick_length * (
             np.cos(stick_angle) * tip_horizontal_force - np.sin(stick_angle) * tip_vertical_force
