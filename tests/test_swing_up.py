@@ -46,7 +46,7 @@ class SwingUpTests(unittest.TestCase):
         self.assertEqual(controller.phase, "swing-up")
         controller.force(np.array([0.4, 0., 2 * np.pi, 0.]), 2)
         self.assertEqual(controller.phase, "balance")
-        self.assertAlmostEqual(controller.cart_target, 0.4)
+        self.assertAlmostEqual(controller.cart_target_position, 0.4)
         controller.force(np.array([0.4, 0., np.deg2rad(25), 0.]), 3)
         self.assertEqual(controller.phase, "swing-up")
 

@@ -14,7 +14,7 @@ geometry:
   rod_diameter: 0.006   # Assumed 6 mm; replace with your measured rod diameter.
   cart_width: 0.10      # Assumed carriage envelope; not a motor specification.
   cart_height: 0.045
-  box_size: 0.04       # Draggable obstacle is a 40 mm square.
+  box_size: 0.10       # Draggable obstacle is a 40 mm square.
 
 simulation:
   duration: 10.0
@@ -31,7 +31,7 @@ controller: #LQR means Linear Quadratic Regulator
 
 sensors:
   # Standard deviations in [m, m/s, rad, rad/s]. Zero means ideal readings.
-  noise_std: [0.0, 0.0, 0.0, 0.0]
+  noise_std: [0.02, 0.1, 0.02, 0.1]
   seed: 7
 
 motor:

@@ -27,11 +27,11 @@ class MotorTests(unittest.TestCase):
 
     def test_published_no_load_point(self):
         motor = DCMotor(self.settings)
-        speed = self.settings["no_load_output_rpm"] * 2 * np.pi / 60 * motor.radius
+        speed = self.settings["no_load_output_rpm"] * 2 * np.pi / 60 * motor.pulley_radius
         reading = motor.evaluate(self.settings["nominal_voltage"], speed)
         self.assertAlmostEqual(reading["current"], self.settings["no_load_current"])
         self.assertAlmostEqual(reading["output_torque"], 0)
-        self.assertAlmostEqual(reading["rotor_rpm"], reading["output_rpm"] * motor.gear_ratio)
+        self.assertAlmostEqual(reading["rotor_rpm"], reading["output_rpm"] * motor.gearbox_ratio)
 
     def test_back_emf_reduces_current_at_fixed_voltage(self):
         self.settings["current_limit"] = self.settings["stall_current"]
@@ -49,8 +49,8 @@ class MotorTests(unittest.TestCase):
     def test_current_limit_and_open_circuit_coast(self):
         motor = DCMotor(self.settings)
         reading = motor.evaluate(100, 0)
-        self.assertEqual(reading["command_voltage"], motor.supply_voltage)
-        self.assertAlmostEqual(reading["current"], motor.current_limit)
+        self.assertEqual(reading["command_voltage"], motor.motor_supply_voltage)
+        self.assertAlmostEqual(reading["current"], motor.motor_current_limit)
         coast = motor.evaluate(0, 0.1, coast=True)
         self.assertEqual(coast["current"], 0)
         self.assertLess(coast["force"], 0)  # Mechanical drag remains.
@@ -67,8 +67,8 @@ class MotorTests(unittest.TestCase):
         self.assertAlmostEqual(result["time"][-1], 8)
         self.assertLess(abs(result["state"][-1, 2]), np.deg2rad(0.1))
         motor = DCMotor(config["motor"])
-        self.assertLessEqual(abs(result["motor"]["current"]).max(), motor.current_limit)
-        self.assertLessEqual(abs(result["motor"]["terminal_voltage"]).max(), motor.supply_voltage)
+        self.assertLessEqual(abs(result["motor"]["current"]).max(), motor.motor_current_limit)
+        self.assertLessEqual(abs(result["motor"]["terminal_voltage"]).max(), motor.motor_supply_voltage)
         for i in range(len(result["time"])):
             reading = motor.evaluate(result["motor"]["command_voltage"][i], result["state"][i, 1])
             self.assertAlmostEqual(reading["force"], result["force"][i])

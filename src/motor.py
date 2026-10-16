@@ -8,59 +8,83 @@ import numpy as np
 
 
 class DCMotor:
-    def __init__(self, settings):
+    def __init__(self, motor_settings):
         # Published values and our mechanism/driver choices live in YAML.
-        for key in ("nominal_voltage", "supply_voltage", "stall_current",
-                    "no_load_current", "no_load_output_rpm", "stall_output_torque",
-                    "gear_ratio", "pulley_radius", "current_limit"):
-            value = settings[key]
-            if not np.isfinite(value) or value <= 0:
-                raise ValueError(f"motor.{key} must be finite and positive")
-        if settings["no_load_current"] >= settings["stall_current"]:
+        for setting_name in (
+            "nominal_voltage",
+            "supply_voltage",
+            "stall_current",
+            "no_load_current",
+            "no_load_output_rpm",
+            "stall_output_torque",
+            "gear_ratio",
+            "pulley_radius",
+            "current_limit",
+        ):
+            setting_value = motor_settings[setting_name]
+            if not np.isfinite(setting_value) or setting_value <= 0:
+                raise ValueError(f"motor.{setting_name} must be finite and positive")
+        if motor_settings["no_load_current"] >= motor_settings["stall_current"]:
             raise ValueError("Motor no-load current must be below stall current")
 
-        self.supply_voltage = settings["supply_voltage"]
-        self.current_limit = settings["current_limit"]
-        self.gear_ratio = settings["gear_ratio"]
-        self.radius = settings["pulley_radius"]
+        self.motor_supply_voltage = motor_settings["supply_voltage"]
+        self.motor_current_limit = motor_settings["current_limit"]
+        self.gearbox_ratio = motor_settings["gear_ratio"]
+        self.pulley_radius = motor_settings["pulley_radius"]
 
         # At stall the shaft isn't moving: V = R I, so R is approximately V/I.
-        self.resistance = settings["nominal_voltage"] / settings["stall_current"]
-        output_speed = settings["no_load_output_rpm"] * 2 * np.pi / 60
-        rotor_speed = output_speed * self.gear_ratio
+        self.motor_resistance = motor_settings["nominal_voltage"] / motor_settings["stall_current"]
+        output_angular_velocity = motor_settings["no_load_output_rpm"] * 2 * np.pi / 60
+        rotor_angular_velocity = output_angular_velocity * self.gearbox_ratio
         # Spinning generates an opposing voltage (back EMF): E = Ke * omega.
-        self.back_emf_constant = (settings["nominal_voltage"] - self.resistance * settings["no_load_current"]) / rotor_speed
+        self.motor_back_emf_constant = (
+            motor_settings["nominal_voltage"]
+            - self.motor_resistance * motor_settings["no_load_current"]
+        ) / rotor_angular_velocity
         # In SI units a DC motor's torque constant equals its back-EMF constant.
-        self.torque_constant = self.back_emf_constant
+        self.motor_torque_constant = self.motor_back_emf_constant
         # Approximate no-load losses as viscous friction: torque_loss = B omega.
-        self.viscous_friction = (self.torque_constant * settings["no_load_current"] / rotor_speed)
+        self.motor_viscous_friction = (
+            self.motor_torque_constant * motor_settings["no_load_current"] / rotor_angular_velocity
+        )
         # Fit an effective gearbox efficiency to the published output stall torque.
         # This is an estimate, not a manufacturer-specified efficiency.
-        self.efficiency = settings["stall_output_torque"] / (self.gear_ratio * self.torque_constant * settings["stall_current"])
-        if self.back_emf_constant <= 0 or not 0 < self.efficiency <= 1:
+        self.gearbox_efficiency = motor_settings["stall_output_torque"] / (
+            self.gearbox_ratio * self.motor_torque_constant * motor_settings["stall_current"]
+        )
+        if self.motor_back_emf_constant <= 0 or not 0 < self.gearbox_efficiency <= 1:
             raise ValueError("Motor reference specifications are inconsistent")
 
-    def voltage_for_force(self, requested_force, measured_cart_speed):
+    def voltage_for_force(self, requested_cart_force, measured_cart_velocity):
         """
         Translate LQR force into voltage using estimated speed compensation.
 
         This feedforward conversion is not an actual current-feedback controller.
         Voltage/current limits can prevent the requested force from being reached.
         """
-        output_speed = measured_cart_speed / self.radius
-        rotor_speed = output_speed * self.gear_ratio
-        output_torque = requested_force * self.radius
+        output_angular_velocity = measured_cart_velocity / self.pulley_radius
+        rotor_angular_velocity = output_angular_velocity * self.gearbox_ratio
+        output_shaft_torque = requested_cart_force * self.pulley_radius
         # Reverse the gearbox relation used below, including braking operation.
-        if output_torque * output_speed >= 0:
-            rotor_torque = output_torque / (self.gear_ratio * self.efficiency)
+        if output_shaft_torque * output_angular_velocity >= 0:
+            rotor_shaft_torque = output_shaft_torque / (
+                self.gearbox_ratio * self.gearbox_efficiency
+            )
         else:
-            rotor_torque = output_torque * self.efficiency / self.gear_ratio
-        current = (rotor_torque + self.viscous_friction * rotor_speed) / self.torque_constant
-        current = np.clip(current, -self.current_limit, self.current_limit)
-        voltage = self.resistance * current + self.back_emf_constant * rotor_speed
-        return float(np.clip(voltage, -self.supply_voltage, self.supply_voltage))
+            rotor_shaft_torque = output_shaft_torque * self.gearbox_efficiency / self.gearbox_ratio
+        motor_current = (
+            rotor_shaft_torque + self.motor_viscous_friction * rotor_angular_velocity
+        ) / self.motor_torque_constant
+        motor_current = np.clip(motor_current, -self.motor_current_limit, self.motor_current_limit)
+        motor_command_voltage = (
+            self.motor_resistance * motor_current
+            + self.motor_back_emf_constant * rotor_angular_velocity
+        )
+        return float(
+            np.clip(motor_command_voltage, -self.motor_supply_voltage, self.motor_supply_voltage)
+        )
 
-    def evaluate(self, command_voltage, cart_speed, coast=False):
+    def evaluate(self, motor_command_voltage, cart_velocity, coast=False):
         """
         Calculate instantaneous motor behavior at the actual cart speed.
 
@@ -68,31 +92,44 @@ class DCMotor:
         The ideal driver limits current and can handle regenerative braking.
         In coast mode the motor circuit is open, rather than shorted at zero volts.
         """
-        output_speed = cart_speed / self.radius
-        rotor_speed = output_speed * self.gear_ratio
-        voltage = float(np.clip(command_voltage, -self.supply_voltage, self.supply_voltage))
-        back_emf = self.back_emf_constant * rotor_speed
+        output_angular_velocity = cart_velocity / self.pulley_radius
+        rotor_angular_velocity = output_angular_velocity * self.gearbox_ratio
+        motor_command_voltage = float(
+            np.clip(motor_command_voltage, -self.motor_supply_voltage, self.motor_supply_voltage)
+        )
+        motor_back_emf_voltage = self.motor_back_emf_constant * rotor_angular_velocity
         if coast:
-            current = 0.0
-            terminal_voltage = back_emf  # Open-circuit generated voltage.
+            motor_current = 0.0
+            motor_terminal_voltage = motor_back_emf_voltage  # Open-circuit generated voltage.
         else:
-            current = float(np.clip((voltage - back_emf) / self.resistance, -self.current_limit, self.current_limit))
+            motor_current = float(
+                np.clip(
+                    (motor_command_voltage - motor_back_emf_voltage) / self.motor_resistance,
+                    -self.motor_current_limit,
+                    self.motor_current_limit,
+                )
+            )
             # When limiting current, the ideal driver adjusts terminal voltage.
-            terminal_voltage = self.resistance * current + back_emf
+            motor_terminal_voltage = self.motor_resistance * motor_current + motor_back_emf_voltage
             # Outside this envelope the ideal driver assumption is insufficient.
-            if abs(terminal_voltage) > self.supply_voltage + 1e-8:
+            if abs(motor_terminal_voltage) > self.motor_supply_voltage + 1e-8:
                 raise ValueError("Motor overspeed exceeds the current-limited driver model")
-        rotor_torque = self.torque_constant * current - self.viscous_friction * rotor_speed
+        rotor_shaft_torque = (
+            self.motor_torque_constant * motor_current
+            - self.motor_viscous_friction * rotor_angular_velocity
+        )
         # Losses reduce delivered torque when driving. When back-driven, they
         # increase the resisting torque needed to generate the same rotor torque.
-        if rotor_torque * rotor_speed >= 0:
-            output_torque = rotor_torque * self.gear_ratio * self.efficiency
+        if rotor_shaft_torque * rotor_angular_velocity >= 0:
+            output_shaft_torque = rotor_shaft_torque * self.gearbox_ratio * self.gearbox_efficiency
         else:
-            output_torque = rotor_torque * self.gear_ratio / self.efficiency
+            output_shaft_torque = rotor_shaft_torque * self.gearbox_ratio / self.gearbox_efficiency
         return {
-            "force": output_torque / self.radius,
-            "command_voltage": voltage, "terminal_voltage": terminal_voltage,
-            "current": current, "output_torque": output_torque,
-            "output_rpm": output_speed * 60 / (2 * np.pi),
-            "rotor_rpm": rotor_speed * 60 / (2 * np.pi),
+            "force": output_shaft_torque / self.pulley_radius,
+            "command_voltage": motor_command_voltage,
+            "terminal_voltage": motor_terminal_voltage,
+            "current": motor_current,
+            "output_torque": output_shaft_torque,
+            "output_rpm": output_angular_velocity * 60 / (2 * np.pi),
+            "rotor_rpm": rotor_angular_velocity * 60 / (2 * np.pi),
         }

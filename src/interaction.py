@@ -7,16 +7,16 @@ class NudgeBox:
     """A mouse-positioned spring/damper obstacle with a limited pushing force."""
 
     stiffness = 80.0  # N/m of overlap.
-    damping = 1.5     # N per m/s of relative closing speed.
-    max_force = 3.0   # N; dragging never directly changes the stick's state.
+    damping = 1.5  # N per m/s of relative closing speed.
+    max_force = 3.0  # N; dragging never directly changes the stick's state.
 
     def __init__(self, config):
-        sizes = config["geometry"]
+        geometry_settings = config["geometry"]
         # The visible ball and its contact boundary use the SAME dimensions.
-        self.width = self.height = sizes["box_size"]
-        self.tip_radius = sizes["top_diameter"] / 2
-        length = config["physics"]["stick_length"]
-        self.home = np.array([-0.35 * length, 0.25 * length])
+        self.width = self.height = geometry_settings["box_size"]
+        self.tip_radius = geometry_settings["top_diameter"] / 2
+        stick_length = config["physics"]["stick_length"]
+        self.home = np.array([-0.35 * stick_length, 0.25 * stick_length])
         self.reset()
 
     def reset(self, cart_position=0.0):
@@ -28,45 +28,53 @@ class NudgeBox:
     @property
     def lower_left(self) -> tuple[float, float]:
         """Matplotlib expects an (x, y) tuple, rather than a NumPy array."""
-        return (float(self.center[0] - self.width / 2),
-                float(self.center[1] - self.height / 2))
+        return (float(self.center[0] - self.width / 2), float(self.center[1] - self.height / 2))
 
-    def update_velocity(self, simulation_interval):
+    def update_velocity(self, frame_interval):
         """Estimate box velocity once per displayed frame, then hold it fixed."""
-        velocity = (self.center - self._previous_center) / simulation_interval
-        speed = np.linalg.norm(velocity)
-        self.velocity = velocity * min(1.0, 2.0 / max(speed, 1e-12))
+        box_velocity = (self.center - self._previous_center) / frame_interval
+        box_speed = np.linalg.norm(box_velocity)
+        self.velocity = box_velocity * min(1.0, 2.0 / max(box_speed, 1e-12))
         self._previous_center = self.center.copy()
 
-    def force_on_tip(self, state, physics):
+    def force_on_tip(self, system_state, physics):
         """Return the current contact force [horizontal, vertical] in newtons.
 
         Unlike an impulse diagnostic, this is recalculated from overlap and
         relative velocity whenever the physics solver asks for an acceleration.
         """
-        position, speed, angle, angular_speed = state
-        length = physics["stick_length"]
-        tip = np.array([position + length * np.sin(angle), length * np.cos(angle)])
-        tip_velocity = np.array([speed + length * np.cos(angle) * angular_speed,
-                                 -length * np.sin(angle) * angular_speed])
-        half_size = np.array([self.width, self.height]) / 2
-        relative_tip = tip - self.center
-        nearest_point = np.clip(relative_tip, -half_size, half_size)
-        delta = relative_tip - nearest_point
-        distance = np.linalg.norm(delta)
-        if distance > self.tip_radius:
+        cart_position, cart_velocity, stick_angle, stick_angular_velocity = system_state
+        stick_length = physics["stick_length"]
+        tip_position = np.array(
+            [cart_position + stick_length * np.sin(stick_angle), stick_length * np.cos(stick_angle)]
+        )
+        tip_velocity = np.array(
+            [
+                cart_velocity + stick_length * np.cos(stick_angle) * stick_angular_velocity,
+                -stick_length * np.sin(stick_angle) * stick_angular_velocity,
+            ]
+        )
+        box_half_size = np.array([self.width, self.height]) / 2
+        tip_relative_position = tip_position - self.center
+        box_nearest_point = np.clip(tip_relative_position, -box_half_size, box_half_size)
+        tip_separation = tip_relative_position - box_nearest_point
+        tip_separation_distance = np.linalg.norm(tip_separation)
+        if tip_separation_distance > self.tip_radius:
             return np.zeros(2)
-        if distance > 1e-12:
-            normal = delta / distance
-            overlap = self.tip_radius - distance
+        if tip_separation_distance > 1e-12:
+            contact_normal = tip_separation / tip_separation_distance
+            contact_overlap = self.tip_radius - tip_separation_distance
         else:
             # If dragged over the tip, push toward the nearest box face.
-            distances = half_size - abs(relative_tip)
-            axis = int(np.argmin(distances))
-            normal = np.zeros(2)
-            normal[axis] = 1.0 if relative_tip[axis] >= 0 else -1.0
-            overlap = self.tip_radius + distances[axis]
-        separation_speed = np.dot(tip_velocity - self.velocity, normal)
-        magnitude = np.clip(self.stiffness * overlap - self.damping * separation_speed,
-                            0.0, self.max_force)
-        return magnitude * normal
+            box_face_distances = box_half_size - abs(tip_relative_position)
+            contact_axis = int(np.argmin(box_face_distances))
+            contact_normal = np.zeros(2)
+            contact_normal[contact_axis] = 1.0 if tip_relative_position[contact_axis] >= 0 else -1.0
+            contact_overlap = self.tip_radius + box_face_distances[contact_axis]
+        contact_separation_velocity = np.dot(tip_velocity - self.velocity, contact_normal)
+        contact_force_magnitude = np.clip(
+            self.stiffness * contact_overlap - self.damping * contact_separation_velocity,
+            0.0,
+            self.max_force,
+        )
+        return contact_force_magnitude * contact_normal

@@ -41,6 +41,9 @@ class SimulationTests(unittest.TestCase):
         del config["geometry"]
         with self.assertRaisesRegex(ValueError, "geometry section"):
             validate_config(config)
+        config["geometry"] = []
+        with self.assertRaisesRegex(TypeError, "geometry section must be a mapping"):
+            validate_config(config)
 
     def test_controller_recovers_and_respects_force_limit(self):
         result = run_simulation(self.config)
