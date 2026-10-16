@@ -4,7 +4,7 @@ A beginner-friendly Python simulation of a cart balancing a stick with a weight
 fixed to its tip. Start with `main.py`, then follow the imports into `src/`.
 
 The actuator now models a Pololu #4698 DC gearmotor with voltage, current, back
-EMF, gearbox losses, and a pulley. See [the motor walkthrough](docs/motor.md).
+EMF, gearbox losses, and a pulley. See [the hardware overview](docs/hardware.md).
 It is a first approximation fitted to published reference data, not a validated
 hardware replica. In near-upright balance mode, a 5 kg cart starting at 12 degrees
 exceeds the default motor capability and falls, while a 2 degree starting tilt
