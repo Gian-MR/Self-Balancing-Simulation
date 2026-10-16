@@ -18,6 +18,19 @@ def validate_config(config, mode="balance"):
     s = config["simulation"]
     c = config["controller"]
 
+    # Dimensions come only from YAML: require every size instead of substituting
+    # hidden defaults when a setting is missing or misspelled.
+    sizes = config.get("geometry")
+    if not isinstance(sizes, dict):
+        raise ValueError("The configuration must include a geometry section")
+    for key in ("top_diameter", "rod_diameter", "cart_width", "cart_height", "box_size"):
+        if key not in sizes:
+            raise ValueError(f"Missing required setting: geometry.{key}")
+        value = sizes[key]
+        if (not isinstance(value, (int, float)) or isinstance(value, bool)
+                or not np.isfinite(value) or value <= 0):
+            raise ValueError(f"geometry.{key} must be finite and positive")
+
     for key in ("cart_mass", "stick_length", "gravity"):
         if not np.isfinite(p[key]) or p[key] <= 0:
             raise ValueError(f"physics.{key} must be finite and positive")

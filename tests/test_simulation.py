@@ -9,7 +9,7 @@ from scipy.integrate import solve_ivp
 import yaml
 
 from src.physics import derivatives
-from src.simulation import run_simulation
+from src.simulation import run_simulation, validate_config
 
 
 class SimulationTests(unittest.TestCase):
@@ -25,6 +25,22 @@ class SimulationTests(unittest.TestCase):
         self.assertLess(result["time"][-1], self.config["simulation"]["duration"])
         self.assertAlmostEqual(np.rad2deg(result["state"][-1, 2]), 80, places=5)
         np.testing.assert_array_equal(result["force"], 0)
+
+    def test_geometry_requires_explicit_positive_dimensions(self):
+        for key in self.config["geometry"]:
+            for value in (None, 0, -1, float("nan"), float("inf"), "large", True):
+                with self.subTest(key=key, value=value):
+                    config = copy.deepcopy(self.config)
+                    if value is None:
+                        del config["geometry"][key]
+                    else:
+                        config["geometry"][key] = value
+                    with self.assertRaisesRegex(ValueError, f"geometry.{key}"):
+                        validate_config(config)
+        config = copy.deepcopy(self.config)
+        del config["geometry"]
+        with self.assertRaisesRegex(ValueError, "geometry section"):
+            validate_config(config)
 
     def test_controller_recovers_and_respects_force_limit(self):
         result = run_simulation(self.config)

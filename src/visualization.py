@@ -11,7 +11,6 @@ from matplotlib.path import Path
 from matplotlib.transforms import Affine2D
 from matplotlib.widgets import Button
 
-from .geometry import dimensions
 from .interaction import NudgeBox
 from .simulation import samples_to_result, simulation_steps
 
@@ -41,7 +40,7 @@ def create_figure(result, config, fig=None, show_controls=False):
     """Build a figure and a function that draws a chosen recorded sample."""
     time, state = result["time"], result["state"]
     length = config["physics"]["stick_length"]
-    sizes = dimensions(config)
+    sizes = config["geometry"]
     ball_radius = sizes["top_diameter"] / 2
     rod_radius = sizes["rod_diameter"] / 2
     cart_width, cart_height = sizes["cart_width"], sizes["cart_height"]

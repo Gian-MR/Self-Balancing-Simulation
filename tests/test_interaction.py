@@ -30,7 +30,7 @@ class InteractionTests(unittest.TestCase):
         plt.close("all")
 
     def test_contact_direction_no_contact_and_force_limit(self):
-        box = NudgeBox()
+        box = NudgeBox(self.config)
         state = np.zeros(4)
         physics = self.config["physics"]
         np.testing.assert_array_equal(box.force_on_tip(state, physics), [0, 0])
@@ -59,7 +59,7 @@ class InteractionTests(unittest.TestCase):
                                tip_force[0] * state[1] + torque * state[3])
 
     def test_small_push_then_release_and_recovery(self):
-        box = NudgeBox()
+        box = NudgeBox(self.config)
         box.max_force = .05
         box.center[:] = [-(box.width / 2 + box.tip_radius / 2),
                          self.config["physics"]["stick_length"]]

@@ -55,8 +55,10 @@ its drawing. A magnified tip inset makes it easier to inspect without enlarging
 the ball in the main scene. The 100 mm scale bar provides a size reference.
 The camera smoothly follows the cart at a fixed scale during live runs.
 
-Edit `geometry` in `config/parameters.yaml` for dimensions. Rod diameter (6 mm)
-and cart size (100 × 45 mm) are assumptions until measured; mass alone cannot
+Edit `geometry` in `config/parameters.yaml` for dimensions. All dimensions
+are read only from this YAML section; missing or invalid
+dimensions produce a configuration error rather than using fallback sizes.
+Rod diameter (6 mm) and cart size (100 × 45 mm) are assumptions until measured; mass alone cannot
 determine them. The purple obstacle is a 40 mm square. Rod/cart dimensions are
 visual only; ball and obstacle sizes also determine contact. The dynamics still
 approximate the ball as a point mass at `stick_length` from the pivot; they do
