@@ -29,26 +29,20 @@ class DCMotor:
         output_speed = settings["no_load_output_rpm"] * 2 * np.pi / 60
         rotor_speed = output_speed * self.gear_ratio
         # Spinning generates an opposing voltage (back EMF): E = Ke * omega.
-        self.back_emf_constant = (
-            settings["nominal_voltage"]
-            - self.resistance * settings["no_load_current"]
-        ) / rotor_speed
+        self.back_emf_constant = (settings["nominal_voltage"] - self.resistance * settings["no_load_current"]) / rotor_speed
         # In SI units a DC motor's torque constant equals its back-EMF constant.
         self.torque_constant = self.back_emf_constant
         # Approximate no-load losses as viscous friction: torque_loss = B omega.
-        self.viscous_friction = (
-            self.torque_constant * settings["no_load_current"] / rotor_speed
-        )
+        self.viscous_friction = (self.torque_constant * settings["no_load_current"] / rotor_speed)
         # Fit an effective gearbox efficiency to the published output stall torque.
         # This is an estimate, not a manufacturer-specified efficiency.
-        self.efficiency = settings["stall_output_torque"] / (
-            self.gear_ratio * self.torque_constant * settings["stall_current"]
-        )
+        self.efficiency = settings["stall_output_torque"] / (self.gear_ratio * self.torque_constant * settings["stall_current"])
         if self.back_emf_constant <= 0 or not 0 < self.efficiency <= 1:
             raise ValueError("Motor reference specifications are inconsistent")
 
     def voltage_for_force(self, requested_force, measured_cart_speed):
-        """Translate LQR force into voltage using estimated speed compensation.
+        """
+        Translate LQR force into voltage using estimated speed compensation.
 
         This feedforward conversion is not an actual current-feedback controller.
         Voltage/current limits can prevent the requested force from being reached.
@@ -67,7 +61,8 @@ class DCMotor:
         return float(np.clip(voltage, -self.supply_voltage, self.supply_voltage))
 
     def evaluate(self, command_voltage, cart_speed, coast=False):
-        """Calculate instantaneous motor behavior at the actual cart speed.
+        """
+        Calculate instantaneous motor behavior at the actual cart speed.
 
         Assume a rigid belt with no slip: output angular speed = cart speed/radius.
         The ideal driver limits current and can handle regenerative braking.
@@ -81,8 +76,7 @@ class DCMotor:
             current = 0.0
             terminal_voltage = back_emf  # Open-circuit generated voltage.
         else:
-            current = float(np.clip((voltage - back_emf) / self.resistance,
-                                    -self.current_limit, self.current_limit))
+            current = float(np.clip((voltage - back_emf) / self.resistance, -self.current_limit, self.current_limit))
             # When limiting current, the ideal driver adjusts terminal voltage.
             terminal_voltage = self.resistance * current + back_emf
             # Outside this envelope the ideal driver assumption is insufficient.

@@ -37,7 +37,8 @@ def design_controller(physics, settings):
 
 
 def calculate_force(measurement, gains, max_force):
-    """Request cart force based on errors, capped by the controller setting.
+    """
+    Request cart force based on errors, capped by the controller setting.
 
     With the DC motor enabled, its voltage/current limits further affect the
     force actually delivered; this function only produces the request.

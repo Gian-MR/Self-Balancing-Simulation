@@ -4,7 +4,8 @@ import numpy as np
 
 
 def derivatives(time, state, force, physics, tip_force=None):
-    """Return rates of change for [position, speed, angle, angular speed].
+    """
+    Return rates of change for [position, speed, angle, angular speed].
 
     Angle is in radians: zero is upright; positive leans to the right.
     The solver supplies time even though these equations do not need it.

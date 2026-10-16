@@ -1,8 +1,9 @@
 """Run a sampled controller against continuous nonlinear physics."""
 
+from typing import Any
+
 import numpy as np
 from scipy.integrate import solve_ivp
-from typing import Any
 
 from .controller import SwingUpController, calculate_force, design_controller
 from .motor import DCMotor
